@@ -81,18 +81,12 @@ Hỗ trợ trọn vẹn các video lưu trữ trên Google Drive (bao gồm cả
 ```
 * Tác tử AI (Antigravity) sẽ tự động kích hoạt engine Playwright chạy ngầm.
 * **Xác thực 1 lần duy nhất:** Nếu video nằm trong tổ chức hoặc yêu cầu đăng nhập tài khoản Google có quyền xem, trình duyệt sẽ tự động mở lên 1 lần duy nhất để bạn đăng nhập. Phiên làm việc được lưu vĩnh viễn tại `~/.driveknot_profile` (hoàn toàn độc lập, không ảnh hưởng Chrome chính).
-* AI tự động mở "Bản chép lời" (Transcript), bóc tách phụ đề tiếng Việt, tự động chọn các mốc thao tác/slide quan trọng để chụp ảnh sắc nét trực tiếp từ thẻ video qua Chrome DevTools Protocol (CDP) và xuất bài note 2 tầng hoàn chỉnh.
+* AI tự động mở "Bản chép lời" (Transcript), bóc tách toàn bộ phụ đề tiếng Việt, và tiến hành phân tích kịch bản thành bài học chuyên sâu 2 tầng thay thế hoàn toàn video (không chụp ảnh màn hình).
 
 #### 2. Sử dụng qua Terminal CLI:
-* **Tự động hóa hoàn toàn từ A-Z (Tự bóc transcript + Tự chọn mốc chụp ảnh kỹ thuật thông minh):**
+* **Tự động hóa bóc tách toàn bộ Bản chép lời:**
   ```bash
   python scripts/gdrive_playwright.py "https://drive.google.com/file/d/.../view" --output-dir "facebook-ads/buoi-1"
-  ```
-  *(Engine tự động quét Chương và từ khóa thao tác màn hình để tự chọn 6-10 khung hình kỹ thuật đắt giá nhất mà bạn không cần phải nhập mốc thời gian thủ công).*
-
-* **Trích xuất chỉ định mốc thời gian thủ công (Tùy chọn nâng cao):**
-  ```bash
-  python scripts/gdrive_playwright.py "https://drive.google.com/file/d/.../view" --screenshots "15:41,23:16,55:36,1:08:08" --output-dir "facebook-ads/buoi-1"
   ```
 
 * **Xuất dữ liệu có cấu trúc dạng JSON:**

@@ -1,3 +1,16 @@
 cache/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# Output directories & artifacts
+facebook-ads-basic/
+scratch/
+output/
+downloads/
+
+# Environment and profiles
+.driveknot_profile/
+.env
+*.log

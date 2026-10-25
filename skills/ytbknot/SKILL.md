@@ -1,6 +1,6 @@
 ---
 name: ytbknot
-description: "Trích xuất và chuyển đổi video YouTube hoặc Google Drive thành tài liệu học tập kỹ thuật chuyên sâu bằng Tiếng Việt cho Antigravity (AGY). AI tự động phân tích kịch bản để chụp chính xác các khung hình kỹ thuật (code, terminal, sơ đồ), lưu bộ ảnh độc lập, bài note 2 tầng thuần Việt, không emoji, tiêu đề ngắn gọn."
+description: "Trích xuất và chuyển đổi video YouTube hoặc Google Drive thành tài liệu học tập kỹ thuật chuyên sâu bằng Tiếng Việt cho Antigravity (AGY). Đối với Google Drive: tập trung 100% công lực phân tích toàn diện Bản chép lời (Transcript) chi tiết thay thế video hoàn toàn, không chụp ảnh màn hình. Đối với YouTube: tự động phân tích kịch bản để chụp khung hình kỹ thuật. Bài note 2 tầng thuần Việt, không emoji, tiêu đề ngắn gọn."
 user-invocable: true
 argument-hint: "<youtube-or-gdrive-url> [url2] [url3] [--category <name>] [--detail brief|standard|deep] [--interval <seconds>] [--clean-ads] [--screenshots [chapters|timestamps]] [--webp-quality <90-95>] [--lossless] [--comments] [--transcript-only] [--no-save] | --check"
 allowed-tools: "run_command, view_file, write_to_file, ask_question, invoke_subagent, send_message"
