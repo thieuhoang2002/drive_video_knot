@@ -43,6 +43,7 @@ node --version
 ├── rules/
 │   └── AGENTS.md
 ├── scripts/
+│   ├── gdrive_playwright.py
 │   └── ytbknot.py
 └── skills/
     └── ytbknot/
@@ -70,7 +71,37 @@ Khi được gọi, kỹ năng sẽ tự động thực thi theo quy trình 2 ph
    * Nếu không có chương: AI chọn 5-10 mốc thời gian kỹ thuật quan trọng nhất dọc bài giảng.
    * Nếu ngoại lệ (không có phụ đề hoặc thời lượng > 2 giờ): Mở hộp thoại hỏi ý định người dùng.
 
-### Các tùy chọn qua Terminal CLI:
+### Trích xuất Video từ Google Drive:
+
+Hỗ trợ trọn vẹn các video lưu trữ trên Google Drive (bao gồm cả link công khai lẫn video khóa học nội bộ ở chế độ **"Chỉ xem, tắt tính năng tải về"**).
+
+#### 1. Sử dụng qua Slash Command trong Antigravity:
+```text
+/ytbknot https://drive.google.com/file/d/.../view
+```
+* Tác tử AI (Antigravity) sẽ tự động kích hoạt engine Playwright chạy ngầm.
+* **Xác thực 1 lần duy nhất:** Nếu video nằm trong tổ chức hoặc yêu cầu đăng nhập tài khoản Google có quyền xem, trình duyệt sẽ tự động mở lên 1 lần duy nhất để bạn đăng nhập. Phiên làm việc được lưu vĩnh viễn tại `~/.driveknot_profile` (hoàn toàn độc lập, không ảnh hưởng Chrome chính).
+* AI tự động mở "Bản chép lời" (Transcript), bóc tách phụ đề tiếng Việt, tự động chọn các mốc thao tác/slide quan trọng để chụp ảnh sắc nét trực tiếp từ thẻ video qua Chrome DevTools Protocol (CDP) và xuất bài note 2 tầng hoàn chỉnh.
+
+#### 2. Sử dụng qua Terminal CLI:
+* **Trích xuất nhanh metadata và bản chép lời:**
+  ```bash
+  python scripts/gdrive_playwright.py "https://drive.google.com/file/d/.../view"
+  ```
+
+* **Trích xuất kèm chụp ảnh màn hình kỹ thuật tại các mốc thời gian:**
+  ```bash
+  python scripts/gdrive_playwright.py "https://drive.google.com/file/d/.../view" --screenshots "15:41,23:16,55:36,1:08:08" --output-dir "facebook-ads/buoi-1"
+  ```
+
+* **Xuất dữ liệu có cấu trúc dạng JSON:**
+  ```bash
+  python scripts/gdrive_playwright.py "https://drive.google.com/file/d/.../view" --json
+  ```
+
+---
+
+### Các tùy chọn qua Terminal CLI (YouTube):
 
 * **Trinh sát nhanh (chỉ lấy kịch bản và cache, không tạo thư mục):**
   ```bash
