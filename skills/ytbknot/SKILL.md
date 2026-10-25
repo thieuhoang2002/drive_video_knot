@@ -1,12 +1,12 @@
 ---
 name: ytbknot
-description: "Trích xuất và chuyển đổi video YouTube thành tài liệu học tập kỹ thuật chuyên sâu bằng Tiếng Việt cho Antigravity (AGY). AI tự động phân tích kịch bản để chụp chính xác các khung hình kỹ thuật (code, terminal, sơ đồ), lưu bộ ảnh độc lập, bài note 2 tầng thuần Việt, không emoji, tiêu đề ngắn gọn."
+description: "Trích xuất và chuyển đổi video YouTube hoặc Google Drive thành tài liệu học tập kỹ thuật chuyên sâu bằng Tiếng Việt cho Antigravity (AGY). AI tự động phân tích kịch bản để chụp chính xác các khung hình kỹ thuật (code, terminal, sơ đồ), lưu bộ ảnh độc lập, bài note 2 tầng thuần Việt, không emoji, tiêu đề ngắn gọn."
 user-invocable: true
-argument-hint: "<youtube-url> [url2] [url3] [--category <name>] [--detail brief|standard|deep] [--interval <seconds>] [--clean-ads] [--screenshots [chapters|timestamps]] [--webp-quality <90-95>] [--lossless] [--comments] [--transcript-only] [--no-save] | --check"
+argument-hint: "<youtube-or-gdrive-url> [url2] [url3] [--category <name>] [--detail brief|standard|deep] [--interval <seconds>] [--clean-ads] [--screenshots [chapters|timestamps]] [--webp-quality <90-95>] [--lossless] [--comments] [--transcript-only] [--no-save] | --check"
 allowed-tools: "run_command, view_file, write_to_file, ask_question, invoke_subagent, send_message"
 ---
 
-Phân tích URL YouTube từ người dùng: <user_request>$ARGUMENTS</user_request>
+Phân tích URL YouTube hoặc Google Drive từ người dùng: <user_request>$ARGUMENTS</user_request>
 
 ## Kiểm tra môi trường
 

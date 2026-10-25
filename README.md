@@ -1,6 +1,6 @@
 # ytbknot
 
-Plugin trích xuất và chuyển đổi video YouTube thành tài liệu học tập kỹ thuật chuyên sâu bằng Tiếng Việt cho Antigravity (AGY).
+Plugin trích xuất và chuyển đổi video YouTube và Google Drive thành tài liệu học tập kỹ thuật chuyên sâu bằng Tiếng Việt cho Antigravity (AGY).
 
 ---
 
@@ -23,6 +23,7 @@ Plugin trích xuất và chuyển đổi video YouTube thành tài liệu học 
 ### Công cụ phụ thuộc:
 * **Python 3.10+**
 * **yt-dlp**
+* **playwright** (Hỗ trợ trích xuất video Google Drive)
 * **ffmpeg**
 * **Node.js** (để yt-dlp giải mã JavaScript runtime của YouTube)
 
