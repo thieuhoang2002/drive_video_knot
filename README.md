@@ -84,12 +84,13 @@ Hỗ trợ trọn vẹn các video lưu trữ trên Google Drive (bao gồm cả
 * AI tự động mở "Bản chép lời" (Transcript), bóc tách phụ đề tiếng Việt, tự động chọn các mốc thao tác/slide quan trọng để chụp ảnh sắc nét trực tiếp từ thẻ video qua Chrome DevTools Protocol (CDP) và xuất bài note 2 tầng hoàn chỉnh.
 
 #### 2. Sử dụng qua Terminal CLI:
-* **Trích xuất nhanh metadata và bản chép lời:**
+* **Tự động hóa hoàn toàn từ A-Z (Tự bóc transcript + Tự chọn mốc chụp ảnh kỹ thuật thông minh):**
   ```bash
-  python scripts/gdrive_playwright.py "https://drive.google.com/file/d/.../view"
+  python scripts/gdrive_playwright.py "https://drive.google.com/file/d/.../view" --output-dir "facebook-ads/buoi-1"
   ```
+  *(Engine tự động quét Chương và từ khóa thao tác màn hình để tự chọn 6-10 khung hình kỹ thuật đắt giá nhất mà bạn không cần phải nhập mốc thời gian thủ công).*
 
-* **Trích xuất kèm chụp ảnh màn hình kỹ thuật tại các mốc thời gian:**
+* **Trích xuất chỉ định mốc thời gian thủ công (Tùy chọn nâng cao):**
   ```bash
   python scripts/gdrive_playwright.py "https://drive.google.com/file/d/.../view" --screenshots "15:41,23:16,55:36,1:08:08" --output-dir "facebook-ads/buoi-1"
   ```

@@ -4,7 +4,8 @@ gdrive_playwright.py — Automated Google Drive video extractor for drive_video_
 Automates browser actions via Playwright:
 - Launches with persistent Google profile (~/.driveknot_profile)
 - Automatically logs in once if required (shows browser window on first run)
-- Extracts video title, duration, and full Vietnamese transcript
+- Extracts video title, duration, chapters, and full Vietnamese transcript
+- Automatically analyzes kịch bản / chapters để tự chọn 6-10 mốc thời gian kỹ thuật then chốt
 - Captures high-resolution keyframe screenshots directly from <video> via CDP
 - Outputs structured JSON or clean Markdown notes for upstream contribution to ytbknot.
 """
@@ -17,8 +18,7 @@ import re
 import json
 import time
 import argparse
-import base64
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 
 # Force UTF-8 on Windows
 if sys.platform == "win32":
@@ -46,6 +46,16 @@ def parse_timestamp_to_seconds(ts: str) -> int:
     return int(parts[0])
 
 
+def format_seconds_to_timestamp(sec: int) -> str:
+    """Format seconds into HH:MM:SS or MM:SS."""
+    h = sec // 3600
+    m = (sec % 3600) // 60
+    s = sec % 60
+    if h > 0:
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m}:{s:02d}"
+
+
 def format_seconds_to_filename(sec: int) -> str:
     """Format seconds into 05m30s string."""
     m = sec // 60
@@ -62,6 +72,75 @@ def extract_drive_file_id(url: str) -> str | None:
     if m:
         return m.group(1)
     return None
+
+
+def auto_select_keyframe_timestamps(
+    transcript: List[Dict[str, str]],
+    chapters: List[Dict[str, Any]],
+    duration_sec: int,
+    target_count: int = 8
+) -> List[str]:
+    """
+    Tự động xác định các mốc thời gian kỹ thuật quan trọng nhất (không cần người dùng nhập tay).
+    Tuân thủ quy tắc ytbknot:
+    1. Không chụp đầu chương (tránh slide bìa, mặt người nói).
+    2. Ưu tiên các phân đoạn có từ khóa thao tác màn hình, sơ đồ, bảng biểu, công cụ.
+    3. Trải đều dọc theo thân bài giảng, cách nhau tối thiểu 2-4 phút.
+    """
+    selected_seconds: List[int] = []
+
+    # Chiến lược 1: Nếu video có Chương (Chapters) trên Google Drive
+    if chapters and len(chapters) >= 2:
+        for i in range(len(chapters)):
+            ch_start = chapters[i]["seconds"]
+            ch_end = chapters[i + 1]["seconds"] if i + 1 < len(chapters) else duration_sec
+            ch_len = ch_end - ch_start
+
+            # Bỏ qua chương mở đầu quá ngắn (< 60s) hoặc phần giới thiệu
+            if ch_start < 90 and i == 0:
+                continue
+
+            # Bắt tại 70% - 85% thân chương (thời điểm màn hình hiển thị trọn vẹn giải pháp / code / bảng)
+            if ch_len > 30:
+                target_sec = ch_start + int(ch_len * 0.75)
+                selected_seconds.append(target_sec)
+
+        if selected_seconds:
+            return [format_seconds_to_timestamp(s) for s in selected_seconds[:target_count]]
+
+    # Chiến lược 2: Phân tích ngữ nghĩa kịch bản (Visual trigger keywords)
+    visual_keywords = [
+        "màn hình", "nhìn vào", "bảng", "sơ đồ", "giao diện", "bước 1", "bước 2", "bước 3",
+        "ví dụ", "cài đặt", "bấm vào", "tài khoản", "fanpage", "bm", "tạo", "hình", "slide",
+        "chi phí", "tính tiền", "cột bên phải", "cấu hình", "thao tác", "nhấp", "chọn"
+    ]
+
+    scored_cues: List[Tuple[int, int, str]] = []
+    for item in transcript:
+        ts = item.get("timestamp", "0:00")
+        sec = parse_timestamp_to_seconds(ts)
+        text = item.get("text", "").lower()
+        score = sum(1 for kw in visual_keywords if kw in text)
+        if score > 0:
+            scored_cues.append((sec, score, ts))
+
+    # Lọc các mốc cách nhau tối thiểu 180s (3 phút), tránh 2 phút đầu và 2 phút cuối
+    last_sec = -300
+    for sec, score, ts in scored_cues:
+        if 120 < sec < (duration_sec - 120) and (sec - last_sec) >= 180:
+            selected_seconds.append(sec)
+            last_sec = sec
+        if len(selected_seconds) >= target_count:
+            break
+
+    # Chiến lược 3: Fallback trải đều theo thời lượng nếu không có keyword
+    if len(selected_seconds) < 4 and duration_sec > 300:
+        selected_seconds = []
+        step = duration_sec / (target_count + 1)
+        for i in range(target_count):
+            selected_seconds.append(int((i + 1) * step))
+
+    return [format_seconds_to_timestamp(s) for s in selected_seconds]
 
 
 class GDriveExtractor:
@@ -81,13 +160,19 @@ class GDriveExtractor:
             ]
         )
 
-    def extract(self, url: str, screenshot_timestamps: List[str] | None = None, output_dir: str | None = None) -> Dict[str, Any]:
+    def extract(
+        self,
+        url: str,
+        screenshot_timestamps: List[str] | None = None,
+        auto_screenshots: bool = True,
+        output_dir: str | None = None
+    ) -> Dict[str, Any]:
         with sync_playwright() as p:
             # First attempt: headless
             context = self._open_context(p, headless=self.headless)
             page = context.new_page()
 
-            print(f"[*] Navigating to: {url} ...", file=sys.stderr)
+            print(f"[*] Đang truy cập: {url} ...", file=sys.stderr)
             page.goto(url, wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(3000)
 
@@ -103,11 +188,10 @@ class GDriveExtractor:
                 page = context.new_page()
                 page.goto(url, timeout=60000)
                 
-                print("[*] Vui lòng đăng nhập Google trên cửa sổ trình duyệt vừa hiện lên.", file=sys.stderr)
+                print("[*] Vui lòng đăng nhập Google trên cửa sổ vừa hiện lên.", file=sys.stderr)
                 print("[*] Hệ thống sẽ tự động phát hiện khi video tải thành công...", file=sys.stderr)
                 
-                # Wait until video element or correct page title appears
-                for _ in range(120): # wait up to 2 minutes
+                for _ in range(120):
                     time.sleep(2)
                     if page.locator("video").count() > 0 or "Record" in page.title() or "Google Drive" in page.title():
                         if "Không tìm thấy trang" not in page.title() and "accounts.google.com" not in page.url:
@@ -121,7 +205,6 @@ class GDriveExtractor:
             # Extract Title
             raw_title = page.title().replace(" - Google Drive", "").strip()
             if not raw_title or raw_title == "Google Drive":
-                # Try finding from page elements
                 name_el = page.locator("[data-tooltip*='Tên'], [aria-label*='Tên tệp']").first
                 if name_el.count() > 0:
                     raw_title = name_el.inner_text().strip()
@@ -134,9 +217,37 @@ class GDriveExtractor:
             except Exception:
                 duration_sec = 0
 
+            # Step: Extract Chapters ("Chương") if available
+            chapters = []
+            chapter_btn = page.locator("button:has-text('Chương'), [aria-label*='Chương'], [aria-label*='Chapters']").first
+            if chapter_btn.count() > 0:
+                try:
+                    chapter_btn.click()
+                    page.wait_for_timeout(1000)
+                    ch_items = page.evaluate("""
+                        () => {
+                            const res = [];
+                            document.querySelectorAll('[role=\"menuitem\"], [role=\"listitem\"]').forEach(el => {
+                                const text = el.innerText || '';
+                                const m = text.match(/(\\d{1,2}:\\d{2}(:\\d{2})?)/);
+                                if (m) {
+                                    res.push({ timestamp: m[1], title: text.replace(m[1], '').trim() });
+                                }
+                            });
+                            return res;
+                        }
+                    """)
+                    for ch in ch_items:
+                        ch["seconds"] = parse_timestamp_to_seconds(ch["timestamp"])
+                        chapters.append(ch)
+                    if chapters:
+                        print(f"[+] Tìm thấy {len(chapters)} chương mục sẵn có từ Drive!", file=sys.stderr)
+                except Exception:
+                    pass
+
             # Step: Open transcript ("Bản chép lời")
             transcript_items = []
-            print("[*] Đang tìm kiếm Bản chép lời (Transcript)...", file=sys.stderr)
+            print("[*] Đang bóc tách Bản chép lời (Transcript)...", file=sys.stderr)
             transcript_btn = page.locator("button:has-text('Bản chép lời'), [aria-label*='Bản chép lời'], [aria-label*='Transcript']").first
             
             if transcript_btn.count() > 0:
@@ -153,14 +264,13 @@ class GDriveExtractor:
                     const tsEls = Array.from(document.querySelectorAll('div, span, p')).filter(e => /^\\d{1,2}:\\d{2}(:\\d{2})?$/.test(e.innerText.trim()));
                     tsEls.forEach(el => {
                         const ts = el.innerText.trim();
-                        const item = el.closest('[role="listitem"]') || el.parentElement;
+                        const item = el.closest('[role=\"listitem\"]') || el.parentElement;
                         let text = item ? item.innerText.replace(ts, '').trim() : '';
                         text = text.replace(/Sao chép đường liên kết.*/gi, '').trim();
                         if (text && text.length > 2) {
                             results.push({ timestamp: ts, text: text });
                         }
                     });
-                    // Deduplicate
                     const seen = new Set();
                     return results.filter(r => {
                         const k = r.timestamp + '::' + r.text;
@@ -177,25 +287,31 @@ class GDriveExtractor:
             else:
                 print("[-] Không tìm thấy bản chép lời tự động từ giao diện Drive.", file=sys.stderr)
 
+            # Step: Resolve Screenshot Timestamps (Automatic or Manual)
+            final_shots = screenshot_timestamps
+            if not final_shots and auto_screenshots and output_dir:
+                print("[*] Đang tự động phân tích kịch bản để chọn khung hình kỹ thuật...", file=sys.stderr)
+                final_shots = auto_select_keyframe_timestamps(
+                    transcript_items, chapters, duration_sec, target_count=8
+                )
+                print(f"[+] Tự động chọn {len(final_shots)} mốc thời gian tối ưu: {', '.join(final_shots)}", file=sys.stderr)
+
             # Step: Capture Screenshots
             captured_screenshots = []
-            if screenshot_timestamps and output_dir:
+            if final_shots and output_dir:
                 shots_dir = os.path.join(output_dir, "screenshots")
                 os.makedirs(shots_dir, exist_ok=True)
-                print(f"[*] Bắt đầu chụp {len(screenshot_timestamps)} khung hình kỹ thuật...", file=sys.stderr)
+                print(f"[*] Bắt đầu chụp {len(final_shots)} khung hình kỹ thuật tự động...", file=sys.stderr)
 
-                for idx, ts in enumerate(screenshot_timestamps, start=1):
+                for idx, ts in enumerate(final_shots, start=1):
                     sec = parse_timestamp_to_seconds(ts)
                     time_label = format_seconds_to_filename(sec)
                     img_name = f"{idx:03d}_{time_label}.png"
                     img_path = os.path.join(shots_dir, img_name)
 
                     try:
-                        # Seek video
                         video.evaluate(f"v => {{ v.currentTime = {sec}; }}")
-                        page.wait_for_timeout(1500) # wait for frame to render
-
-                        # Capture using Playwright element screenshot (bypasses CORS/canvas security)
+                        page.wait_for_timeout(1500)
                         video.screenshot(path=img_path)
                         captured_screenshots.append({
                             "timestamp": ts,
@@ -203,7 +319,7 @@ class GDriveExtractor:
                             "filename": img_name,
                             "path": img_path
                         })
-                        print(f"    [OK] Đã chụp {img_name} tại mốc {ts}", file=sys.stderr)
+                        print(f"    [OK] Đã chụp tự động {img_name} tại mốc {ts}", file=sys.stderr)
                     except Exception as err:
                         print(f"    [ERR] Lỗi khi chụp tại {ts}: {err}", file=sys.stderr)
 
@@ -213,24 +329,33 @@ class GDriveExtractor:
                 "url": url,
                 "title": raw_title,
                 "duration_seconds": duration_sec,
+                "chapters": chapters,
                 "transcript": transcript_items,
                 "screenshots": captured_screenshots
             }
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Google Drive Video Extractor for drive_video_knot")
+    parser = argparse.ArgumentParser(description="Google Drive Video Extractor for drive_video_knot (100% Automated)")
     parser.add_argument("url", help="Google Drive video URL")
-    parser.add_argument("--screenshots", help="Comma-separated timestamps to capture, e.g. '15:41,55:36,1:08:08'")
-    parser.add_argument("--output-dir", help="Output directory for screenshots and data")
-    parser.add_argument("--no-headless", action="store_true", help="Run browser visibly")
-    parser.add_argument("--json", action="store_true", help="Print result as JSON")
+    parser.add_argument("--screenshots", help="Mốc thời gian chỉ định (tùy chọn, mặc định tự động chọn thông minh)")
+    parser.add_argument("--no-screenshots", action="store_true", help="Không chụp ảnh màn hình")
+    parser.add_argument("--output-dir", help="Thư mục lưu trữ ảnh chụp và bài học")
+    parser.add_argument("--no-headless", action="store_true", help="Hiển thị cửa sổ trình duyệt")
+    parser.add_argument("--json", action="store_true", help="In kết quả dạng JSON")
 
     args = parser.parse_args()
 
     shots = [s.strip() for s in args.screenshots.split(",")] if args.screenshots else None
     extractor = GDriveExtractor(headless=not args.no_headless)
-    data = extractor.extract(args.url, screenshot_timestamps=shots, output_dir=args.output_dir)
+    
+    auto_shots = not args.no_screenshots
+    data = extractor.extract(
+        args.url,
+        screenshot_timestamps=shots,
+        auto_screenshots=auto_shots,
+        output_dir=args.output_dir
+    )
 
     if args.json:
         print(json.dumps(data, ensure_ascii=False, indent=2))
