@@ -5,7 +5,9 @@ __pycache__/
 *.pyd
 
 # Output directories & artifacts
+facebook-ads*/
 facebook-ads-basic/
+facebook-ads-advance/
 scratch/
 output/
 downloads/

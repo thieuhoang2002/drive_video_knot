@@ -121,14 +121,18 @@ class GDriveExtractor:
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)
 
-        # 1. Start video playback via outer play button
+        # 1. Start video playback via outer play button or keyboard shortcut
         print("[*] Đang khởi động trình phát video...", file=sys.stderr)
-        play_btn = page.locator("button[aria-label*='để phát: k'], [aria-label*='Phát']").first
+        play_btn = page.locator("button[aria-label*='để phát: k'], [aria-label*='Phát'], [aria-label*='Play']").first
         if play_btn.count() > 0:
             try:
-                play_btn.click()
+                play_btn.click(timeout=3000)
             except Exception:
                 pass
+        try:
+            page.keyboard.press("k")
+        except Exception:
+            pass
         page.wait_for_timeout(3000)
 
         # 2. Extract Title
@@ -142,7 +146,7 @@ class GDriveExtractor:
 
         # 3. Locate video element inside iframe
         video = None
-        for _ in range(10):
+        for _ in range(12):
             for f in page.frames:
                 try:
                     if f.locator("video").count() > 0:
@@ -167,73 +171,60 @@ class GDriveExtractor:
                     pass
                 page.wait_for_timeout(500)
 
-        # 5. Extract Chapters if present
-        chapters = []
-        ch_btn = page.locator("button[aria-label*='Chương']").first
-        if ch_btn.count() > 0:
-            try:
-                ch_btn.click(force=True)
-                page.wait_for_timeout(1500)
-                ch_items = page.evaluate("""() => {
-                    const res = [];
-                    document.querySelectorAll('[role="menuitem"], [role="listitem"]').forEach(el => {
-                        const text = el.innerText || '';
-                        const m = text.match(/(\\d{1,2}:\\d{2}(:\\d{2})?)/);
-                        if (m) {
-                            res.push({ timestamp: m[1], title: text.replace(m[1], '').trim() });
-                        }
-                    });
-                    return res;
-                }""")
-                for ch in ch_items:
-                    ch["seconds"] = parse_timestamp_to_seconds(ch["timestamp"])
-                    chapters.append(ch)
-                if chapters:
-                    print(f"[+] Tìm thấy {len(chapters)} chương mục sẵn có từ Drive!", file=sys.stderr)
-            except Exception:
-                pass
-
-        # 6. Open Transcript and extract cues
+        # 5. Open Transcript and extract cues (retry loop until transcript loads)
         transcript_items = []
         print("[*] Đang bóc tách Bản chép lời (Transcript)...", file=sys.stderr)
-        ts_btn = page.locator("button[aria-label='Bản chép lời']").first
+        ts_btn = page.locator("button[aria-label='Bản chép lời'], button:has-text('Bản chép lời')").first
         if ts_btn.count() > 0:
             try:
                 ts_btn.click(force=True)
-                page.wait_for_timeout(3500)
             except Exception as e:
                 print(f"[-] Không thể click nút bản chép lời: {e}", file=sys.stderr)
 
-        extracted_cues = page.evaluate("""() => {
-            const results = [];
-            const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-            let node;
-            while ((node = walker.nextNode())) {
-                const val = node.nodeValue.trim();
-                if (/^\\d{1,2}:\\d{2}(:\\d{2})?$/.test(val)) {
-                    let p = node.parentElement;
-                    while (p && p.innerText.trim() === val) {
-                        p = p.parentElement;
-                    }
-                    if (p) {
-                        const full = p.innerText.replace(val, '').trim();
-                        if (full.length > 2) {
-                            results.push({
-                                timestamp: val,
-                                text: full.split('\\n')[0].replace(/Sao chép đường liên kết.*/gi, '').trim()
-                            });
+        extracted_cues = []
+        for _ in range(12):
+            page.wait_for_timeout(1000)
+            cues = page.evaluate("""() => {
+                const results = [];
+                const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                let node;
+                while ((node = walker.nextNode())) {
+                    const val = node.nodeValue.trim();
+                    if (/^\\d{1,2}:\\d{2}(:\\d{2})?$/.test(val)) {
+                        let p = node.parentElement;
+                        while (p && p.innerText.trim() === val) {
+                            p = p.parentElement;
+                        }
+                        if (p) {
+                            const full = p.innerText.replace(val, '').trim();
+                            if (full.length > 2) {
+                                results.push({
+                                    timestamp: val,
+                                    text: full.split('\\n')[0].replace(/Sao chép đường liên kết.*/gi, '').trim()
+                                });
+                            }
                         }
                     }
                 }
-            }
-            const seen = new Set();
-            return results.filter(r => {
-                const k = r.timestamp + '::' + r.text;
-                if (seen.has(k)) return false;
-                seen.add(k);
-                return true;
-            });
-        }""")
+                const seen = new Set();
+                return results.filter(r => {
+                    const k = r.timestamp + '::' + r.text;
+                    if (seen.has(k)) return false;
+                    seen.add(k);
+                    return true;
+                });
+            }""")
+            if len(cues) > 5:
+                extracted_cues = cues
+                break
+            # If cues still empty, try clicking transcript button again
+            if ts_btn.count() > 0 and len(cues) <= 1:
+                try:
+                    ts_btn.click(force=True)
+                except Exception:
+                    pass
+
+        chapters = []
 
         if extracted_cues:
             transcript_items = extracted_cues
